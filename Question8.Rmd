@@ -1,0 +1,78 @@
+---
+title: "Problem 8: Association Rule Mining"
+output: pdf_document
+date: "2023-08-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(igraph)
+library(arules)  # has a big ecosystem of packages built around it
+library(arulesViz)
+library(igraph)
+```
+
+
+```{r}
+grocery_raw = read.csv("groceries.txt", sep = " ", header = FALSE)
+```
+
+```{r}
+groceryrules = apriori(grocery_raw, 
+	parameter=list(support=.005, confidence=.1, maxlen=4))
+```
+# Support vs Confidence Scatter Plot
+```{r}
+plot(groceryrules, measure = c("support", "lift"), shading = "confidence")
+```
+Support gives us a measure of an association rule, telling us the fraction of grocery carts that contain both parts of the rule. For example, if your rule is that getting milk and eggs implies you also bought beer and cheese, then the support of the rule is the fraction of grocery carts that people have purchased with eggs, milk, beer, and cheese in them. The Lift is a different measure of the quality of the rule. The lift also takes into account likely it is your shopping cart contains a certain number of items in the first place. Sticking with the same example, lift is ratio between the probability that you bought beer and cheese given the probability that you bought eggs and milk and the baseline probability that you bought eggs and milk. What the scatter plot tells us, then, is that most of our high lift rules as low support, which makes sense: if you punish having a high baseline probability of purchase, then your most informative rules will be the ones that associate rare pruchases.
+
+```{r}
+transactions <- as(grocery_raw, "transactions")
+
+# Mine association rules using apriori
+rules <- apriori(transactions, parameter = list(support = 0.01, confidence = 0.5))
+
+# Plotting a histogram of support
+plot(rules, method = "two-key plot", measure = "support", main = "Histogram of Support")
+
+```
+In the example we gave earlier, confidence is the probability that you bought beer and cheese given that you bought milk and eggs. This plot tells us a couple of things. First, for the rules that only associate one item, confidence is in direct correlation with support. This is because the rule is associating one item you bought with the empty set, which we think of as inherently existing in every cart. So for order 1, confidence and support are exactly the same. For some of the higher order rules we can see a similar problem: if all the actual items are on one side of the rule (and the empty set on the other), we get this linear effect where confidence = support. We can see another anomaly in the data points that appear at the very top: where confidence =1. These correspond to unique carts where one part of the rule is, say, the full cart of grocery items and the other is a unique subset of those items. That is, if only one person bought ham, sour cream, and eggs and then also bought milk, then the rule that associates ham, sour cream, and eggs with that full list of item will have perfect confidence (the three items perfectly predict the four). The final observation we should make is that higher order rules tend to have higher confidence. This is likely because the more items you use to predict the cart, the fewer times that cart appears in the data. That is, these rules pick out the larger carts in the data sets, because the more items you have, the more likely it is that no one else has bought that combination of items. 
+
+**Association Rule Graph (Lift > 8)**
+```{r}
+grocery_graph = associations2igraph(subset(rules, lift>8), associationsAsNodes = FALSE)
+
+layout <- layout_with_mds(grocery_graph)
+
+# Save the layout coordinates to the graph
+V(grocery_graph)$x <- layout[, 1]
+V(grocery_graph)$y <- layout[, 2]
+
+# Save the graph in GraphML format
+write_graph(grocery_graph, file = 'grocery.graphml', format = 'graphml')
+
+# Read the graph with layout from the GraphML file
+tograph <- read_graph('grocery.graphml', format = 'graphml')
+
+
+# Plot the graph using the saved layout and modified labels
+plot(tograph, edge.arrow.size = 0.5)
+
+# Print the full vertex labels as tooltips when hovering over nodes
+tkplot(tograph, vertex.label = V(tograph)$name)
+
+# Print the vertex numbers and their corresponding names
+for (i in 1:vcount(tograph)) {
+  vertex_number <- i
+  vertex_name <- V(tograph)[i]$name
+  vertex_label <- V(tograph)[i]$label
+  cat(sprintf("%d = %s (%s)\n", vertex_number, vertex_name, vertex_label))
+}
+```
+
+The graph above visualizes some of the association rules that have lift greater than 8. Running the code in rmd will generate an interactive plot of the graph which can help to visualize some of the more clustered rules. Additionally, a key is printed out that associates the tkplot vertex number with the original vertex name. We can gleen a couple of insights from this graph. First, we see that there is a strong association rule that says whenever you are buying "tropical fruit" you must be buying "citrus", indicating that potentially all of the tropical fruit items you can buy are considered citrus as well. Another insight as that the empty set (5 of the above vertices are unnamed, indicating the X in the rule is the empty itemset) can generate rules with high lift in our data set. This could happen if certain itemsets are common enough that they can be predicted with no information. For example, if 90% of shoppers buy milk and eggs, then the rule that predicts \{\} -> \{milk, eggs\} may have high lift.
