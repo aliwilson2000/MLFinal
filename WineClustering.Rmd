@@ -1,0 +1,555 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## Clustering and dimensionality reduction
+
+#### Question:
+
+The data in [wine.csv](https://github.com/jgscott/STA380/blob/master/data/wine.csv) contains information on 11 chemical properties of 6500 different bottles of *vinho verde* wine from northern Portugal. In addition, two other variables about each wine are recorded:
+
+-   whether the wine is red or white
+
+-   the quality of the wine, as judged on a 1-10 scale by a panel of certified wine snobs.
+
+Run PCA, tSNE, and any clustering algorithm of your choice on the 11 chemical properties (or suitable transformations thereof) and summarize your results. Which dimensionality reduction technique makes the most sense to you for this data? Convince yourself (and me) that your chosen approach is easily capable of distinguishing the reds from the whites, using only the "unsupervised" information contained in the data on chemical properties. Does your unsupervised technique also seem capable of distinguishing the higher from the lower quality wines? Present appropriate numerical and/or visual evidence to support your conclusions.
+
+To clarify: I'm not asking you to run a supervised learning algorithms. Rather, I'm asking you to see whether the differences in the labels (red/white and quality score) emerge naturally from applying an unsupervised technique to the chemical properties. This should be straightforward to assess using plots.
+
+#### Order of Question Execution:
+
+I have put the order of question execution below. I decided to start with the very basic models, before implementing the PCA and tSNE models. This was simply because I followed the systematic way we learned the clustering models in class.
+
+1.  Basic Clustering Models:
+
+    -   k-means clustering
+
+    -   k-means++ clustering
+
+    -   Hierarchical clustering with a cluster Dendogram
+
+2.  PCA Model
+
+3.  tSNE Model
+
+#### **K-Means Clustering Model:**
+
+**Step 1:** import packages and read wine data. Note, the wine data is in my downloads.
+
+```{r}
+library(ggplot2)
+library(ClusterR)  #for kmeans++
+library(foreach)
+library(mosaic)
+
+#Download the file from my desktop and make sure I include the header:
+library(readr)
+wine <- read.csv("~/Desktop/wine.csv", header = TRUE)
+```
+
+Run a simple summary first: this allows us to see what type of features we are dealing with.
+
+```{r}
+summary(wine)
+```
+
+As the summary shows there are many variables, bulleted are key takeaways:
+
+-   Color is a string (red/white).
+
+-   The length of the data is 6497: we have 6497 wines to analyze.
+
+-   Quality is measured in integers, unlike the 11 chemical properties, measured as floats.
+
+-   While quality is rated on a 0-10 scale there are no wines with a quality rating lower than 3 and higher than 9.
+
+-   The ranges of many chemicals are very large, e.g. total sulfur dioxide ranges from 6.0 to 440.0. *This makes me wonder if the huge range comes from very different wine qualities, or differing chemical make ups for red and white wine.*
+
+**Step 2:** Center and scale data.
+
+X will **not** include quality or color.
+
+```{r}
+#0 for white, 1 for red
+wine$color_numeric <- as.numeric(factor(wine$color)) - 1  
+
+#Now I am going to set X as all of my variables
+X = wine[, c(1:11)] 
+X = scale(X, center=TRUE, scale=TRUE)
+X = scale(X, center=TRUE, scale=TRUE)
+```
+
+Checking the column headings:
+
+```{r}
+colnames(X)
+```
+
+```{r}
+#Extract the centers and scales from the rescaled data (which are named attributes)
+mu = attr(X,"scaled:center")
+sigma = attr(X,"scaled:scale")
+```
+
+**Step 3:** Run k-means cluster:
+
+To start, I am going to run a k-means with 10 clusters and 25 starts.
+
+```{r}
+clust1 = kmeans(X, 10, nstart=25)
+```
+
+**Step 4:** Looking at the clusters:
+
+Looking at the z-scores of these centroids is not super helpful:
+
+```{r}
+#What are the clusters?
+clust1$center  
+```
+
+By converting these clusters back (through multiplying by our sigma + mu), results are far more relevant and interpretable.
+
+[Looking at Cluster 1:]{.underline}
+
+```{r}
+clust1$center[1,]*sigma + mu
+```
+
+The cluster center value for volatile acidity is positive. This indicates that, on average, the wines within cluster 1 tend to have a slightly higher volatile acidity value versus the overall mean value of the entire data set. Conversely, the cluster center value for alcohol is negative, indicating that, on average, the wines within cluster 1 tend to have a slightly lower alcohol concentration, in comparison to the mean value of the entire data set.
+
+[Cluster 6:]{.underline}
+
+```{r}
+clust1$center[6,]*sigma + mu
+```
+
+*Looking at the same two variables for ease of comparison:*
+
+The cluster center value for alcohol is positive. This indicates that, on average, the wines within cluster 6 tend to have a slightly higher alcohol concentration versus the overall mean value of the entire data set. Conversely, the cluster center value for volatile acidity is negative, indicating that, on average, the wines within cluster 6 tend to have a slightly lower volatile acidity values, in comparison to the mean value of the entire data set.
+
+[Looking at which wines belong to which clusters:]{.underline}
+
+Unlike other data sets, this was not useful as the names of the specific wines were taken out of the data set for privacy reasons. As a result, when we look at cluster one, we simply get the indexes which do not reveal anything:
+
+```{r}
+#Which wines are in which clusters?
+which(clust1$cluster == 1)
+```
+
+Next I looked at the mean value of each wine quality within the clusters. I was hoping to find some large variations within this summary, so that the quality of wines were very distinguishable. Notwithstanding, all of the wine qualities are within 1 point of each other:
+
+```{r}
+average_quality_cluster1 <- mean(wine$quality[clust1$cluster == 1])
+print(paste("Average quality of wines in cluster 1:", average_quality_cluster1))
+
+average_quality_cluster2 <- mean(wine$quality[clust1$cluster == 2])
+print(paste("Average quality of wines in cluster 2:", average_quality_cluster2))
+
+average_quality_cluster3 <- mean(wine$quality[clust1$cluster == 3])
+print(paste("Average quality of wines in cluster 3:", average_quality_cluster3))
+
+average_quality_cluster4 <- mean(wine$quality[clust1$cluster == 4])
+print(paste("Average quality of wines in cluster 4:", average_quality_cluster4))
+
+average_quality_cluster5 <- mean(wine$quality[clust1$cluster == 5])
+print(paste("Average quality of wines in cluster 5:", average_quality_cluster5))
+
+average_quality_cluster6 <- mean(wine$quality[clust1$cluster == 6])
+print(paste("Average quality of wines in cluster 6:", average_quality_cluster6))
+
+average_quality_cluster7 <- mean(wine$quality[clust1$cluster == 7])
+print(paste("Average quality of wines in cluster 7:", average_quality_cluster7))
+
+average_quality_cluster8 <- mean(wine$quality[clust1$cluster == 8])
+print(paste("Average quality of wines in cluster 2:", average_quality_cluster8))
+
+average_quality_cluster9 <- mean(wine$quality[clust1$cluster == 9])
+print(paste("Average quality of wines in cluster 9:", average_quality_cluster9))
+
+average_quality_cluster10 <- mean(wine$quality[clust1$cluster == 10])
+print(paste("Average quality of wines in cluster 10:", average_quality_cluster10))
+```
+
+Since the question addressed both the quality and the color, I have repeated the mean cluster values for the color numeric column I created, previously. These results are far more promising and distinguishable: clusters 1-5 are all below 0.2, indicating that the majority of the wines within these clusters are white wine, and the remaining 5 clusters are all above 0.99, indicating that they are mainly red wines.
+
+```{r}
+average_color_cluster1 <- mean(wine$color_numeric[clust1$cluster == 1])
+print(paste("Average color (numeric) of wines in cluster 1:", average_color_cluster1))
+
+average_color_cluster2 <- mean(wine$color_numeric[clust1$cluster == 2])
+print(paste("Average color (numeric) of wines in cluster 2:", average_color_cluster2))
+
+average_color_cluster3 <- mean(wine$color_numeric[clust1$cluster == 3])
+print(paste("Average color (numeric) of wines in cluster 3:", average_color_cluster3))
+
+average_color_cluster4 <- mean(wine$color_numeric[clust1$cluster == 4])
+print(paste("Average color (numeric) of wines in cluster 4:", average_color_cluster4))
+
+average_color_cluster5 <- mean(wine$color_numeric[clust1$cluster == 5])
+print(paste("Average color (numeric) of wines in cluster 5:", average_color_cluster5))
+
+average_color_cluster6 <- mean(wine$color_numeric[clust1$cluster == 6])
+print(paste("Average color (numeric) of wines in cluster 6:", average_color_cluster6))
+
+average_color_cluster7 <- mean(wine$color_numeric[clust1$cluster == 7])
+print(paste("Average color (numeric) of wines in cluster 7:", average_color_cluster7))
+
+average_color_cluster8 <- mean(wine$color_numeric[clust1$cluster == 8])
+print(paste("Average color (numeric) of wines in cluster 8:", average_color_cluster8))
+
+average_color_cluster9 <- mean(wine$color_numeric[clust1$cluster == 9])
+print(paste("Average color (numeric) of wines in cluster 9:", average_color_cluster9))
+
+average_color_cluster10 <- mean(wine$color_numeric[clust1$cluster == 10])
+print(paste("Average color (numeric) of wines in cluster 10:", average_color_cluster10))
+```
+
+[Visual Depictions (Graphs):]{.underline}
+
+To go with the mean values, I have also produced some plots to that color is easily distinguishable, and quality is not *as distinguishable.\
+*
+
+Plot 1: Scatterplot showing different wine quality's alcohol levels:
+
+```{r}
+# A few plots with cluster membership shown
+# qplot is in the ggplot2 library
+qplot(quality, alcohol, data=wine, color=factor(clust1$cluster))
+```
+
+For the first plot I actually played around with plotting each of the chemical elements against quality, and they all had similar patterns, so I have only kept alcohol. Looking at cluster 6 (turquoise color), it is clear that all types of qualities are represented in this cluster. There are turquoise points at every quality level. However, cluster six seems to have higher alcohol levels in comparison to the pink and purple points (clusters 9-10). This cements the findings from the mean values for quality, in that quality of wines is not easily distinguishable through k-means clustering.
+
+Plot 2: Scatterplot showing just color and quality (cluster centers)
+
+```{r}
+qplot(quality, color, data=wine, color=factor(clust1$cluster))
+```
+
+The second scatterplot shows just color and quality, using the cluster centers. From this plot it seems like we can distinguish between quality a little better, when we separate the red and white wines. For example, cluster 2 seems to have higher quality red wines, while cluster 4 has lower quality red wines. Notwithstanding, we have to be careful here as there are some clusters that we cannot easily see (such as clusters 9 and 10) as they have been plotted underneath cluster 7, for example, due to overlaps.
+
+[K-Means Summary:]{.underline}
+
+From the k-means clustering method, red and white wines are easily distinguished, using only the "unsupervised" information contained in the data on chemical properties. However, this technique does not also seem capable of distinguishing between higher and lower quality wines.
+
+#### **K-Means++ Clustering Model:**
+
+Using the same values in X (i.e. all of the chemical elements), I have implemented a kmeans++ model.
+
+```{r}
+
+# Using kmeans++ initialization
+clust2 = KMeans_rcpp(X, clusters=10, num_init=25, initializer = 'kmeans++')
+cat("Total SSE for cluster kmeans++:", clust2$total_SSE)
+cat("Total SSE for cluster kmeans:", clust1$totss)
+```
+
+I have now repeated the same analysis for kmeans++ as I did for kmeans:
+
+```{r}
+print("K-means++ Quality and Color mean values per cluster")
+average_quality_cluster1 <- mean(wine$quality[clust2$cluster == 1])
+print(paste("Average quality of wines in cluster 1:", average_quality_cluster1))
+
+average_quality_cluster2 <- mean(wine$quality[clust2$cluster == 2])
+print(paste("Average quality of wines in cluster 2:", average_quality_cluster2))
+
+average_quality_cluster3 <- mean(wine$quality[clust2$cluster == 3])
+print(paste("Average quality of wines in cluster 3:", average_quality_cluster3))
+
+average_quality_cluster4 <- mean(wine$quality[clust2$cluster == 4])
+print(paste("Average quality of wines in cluster 4:", average_quality_cluster4))
+
+average_quality_cluster5 <- mean(wine$quality[clust2$cluster == 5])
+print(paste("Average quality of wines in cluster 5:", average_quality_cluster5))
+
+average_quality_cluster6 <- mean(wine$quality[clust2$cluster == 6])
+print(paste("Average quality of wines in cluster 6:", average_quality_cluster6))
+
+average_quality_cluster7 <- mean(wine$quality[clust2$cluster == 7])
+print(paste("Average quality of wines in cluster 7:", average_quality_cluster7))
+
+average_quality_cluster8 <- mean(wine$quality[clust2$cluster == 8])
+print(paste("Average quality of wines in cluster 2:", average_quality_cluster8))
+
+average_quality_cluster9 <- mean(wine$quality[clust2$cluster == 9])
+print(paste("Average quality of wines in cluster 9:", average_quality_cluster9))
+
+average_quality_cluster10 <- mean(wine$quality[clust2$cluster == 10])
+print(paste("Average quality of wines in cluster 10:", average_quality_cluster10))
+```
+
+```{r}
+average_color_cluster1 <- mean(wine$color_numeric[clust2$cluster == 1])
+print(paste("Average color (numeric) of wines in cluster 1:", average_color_cluster1))
+
+average_color_cluster2 <- mean(wine$color_numeric[clust2$cluster == 2])
+print(paste("Average color (numeric) of wines in cluster 2:", average_color_cluster2))
+
+average_color_cluster3 <- mean(wine$color_numeric[clust2$cluster == 3])
+print(paste("Average color (numeric) of wines in cluster 3:", average_color_cluster3))
+
+average_color_cluster4 <- mean(wine$color_numeric[clust2$cluster == 4])
+print(paste("Average color (numeric) of wines in cluster 4:", average_color_cluster4))
+
+average_color_cluster5 <- mean(wine$color_numeric[clust2$cluster == 5])
+print(paste("Average color (numeric) of wines in cluster 5:", average_color_cluster5))
+
+average_color_cluster6 <- mean(wine$color_numeric[clust2$cluster == 6])
+print(paste("Average color (numeric) of wines in cluster 6:", average_color_cluster6))
+
+average_color_cluster7 <- mean(wine$color_numeric[clust2$cluster == 7])
+print(paste("Average color (numeric) of wines in cluster 7:", average_color_cluster7))
+
+average_color_cluster8 <- mean(wine$color_numeric[clust2$cluster == 8])
+print(paste("Average color (numeric) of wines in cluster 8:", average_color_cluster8))
+
+average_color_cluster9 <- mean(wine$color_numeric[clust2$cluster == 9])
+print(paste("Average color (numeric) of wines in cluster 9:", average_color_cluster9))
+
+average_color_cluster10 <- mean(wine$color_numeric[clust2$cluster == 10])
+print(paste("Average color (numeric) of wines in cluster 10:", average_color_cluster10))
+```
+
+The kmeans++ clustering method seems to perform worse in distinguishing quality, if we simply look at the mean values. Aside from cluster 10, which is much higher, the other clusters seem to average around 5.3-5.9. This is a smaller range than before. Looking at the average color, it seems to separate some clusters better, and others worse. For example, cluster 7 is entirely white wines, and cluster 8 is very nearly all red wines. This is a huge success! Yet, cluster 2 seems to be more of a mix, with a value of 0.8125, which is the closest value to 0.5 out of kmeans and kmeans++ clusters.
+
+[Plotting:]{.underline}
+
+A similar issue of quality is shown in the same plot as before: clusters have representation in each quality score, as most clearly shown by cluster 10 in the scatterplot below:
+
+```{r}
+# A few plots with cluster membership shown
+# qplot is in the ggplot2 library
+qplot(quality, alcohol, data=wine, color=factor(clust2$cluster))
+```
+
+```{r}
+qplot(quality, color, data=wine, color=factor(clust2$cluster))
+```
+
+Scatterplot 2 shows very similar results to kmeans.
+
+[Summary for kmeans++:]{.underline}
+
+In summary, kmeans++ is preferred to kmeans, as we have some more robust results when identifying color wines within the clusters. This is unsurprising given that K-Means++ is merely an improved version of the K-Means algorithm that enhances the initialization step, leading to faster convergence and better clustering quality. Notwithstanding, I am still unsatisfied with the quality side of things, so hopefully this can be improved in the subsequent models.
+
+#### **Hierarchical Clustering Model:**
+
+Next, hierarchical clustering was executed. As the summary below shows, these clusters are not evenly split, and there is just 1 wine in cluster 9 and cluster 10.
+
+```{r}
+# First form a pairwise distance matrix
+distance_between_wines = dist(X)
+
+# Now run hierarchical clustering
+h1 = hclust(distance_between_wines, method='complete')
+
+# Cut the tree into 10 clusters
+cluster3 = cutree(h1, k=10)
+summary(factor(cluster3))
+
+
+```
+
+Next, I have plotted a dendogram to visually depict this form of clustering. However, as shown in the plot, it is really uninterpretable. Thus, I will look at the cluster center means again, and see if there are any obvious patterns for color and quality.
+
+```{r}
+# Plot the dendrogram
+plot(h1, cex=0.3)
+```
+
+While the dendogram is not very helpful, the cluster mean values for color and quality are. Where most of the wines are contained (in cluster 2), we see that there is a wider mix of red and white wines (0.8 numeric values), with a quality value of six. Since this class is so large, I also printed the range and medium values to see if the mean was skewed (for quality). The median value is 6, however, the range is 6, with the lowest value 3, and highest 9. This is the same range as the entire data set, which insinuates that the highest and lowest quality wines from wine.csv are contained within cluster 2. Obviously, this is not a good sign by way of distinguishing quality between clusters.
+
+```{r}
+print("Hierarchical Quality and Color mean values per cluster")
+average_quality_cluster1 <- mean(wine$quality[cluster3 == 1])
+print(paste("Average quality of wines in cluster 1:", average_quality_cluster1))
+
+average_quality_cluster2 <- mean(wine$quality[cluster3 == 2])
+print(paste("Average quality of wines in cluster 2:", average_quality_cluster2))
+median_quality_cluster2 <- median(wine$quality[cluster3 == 2])
+print(paste("Median quality of wines in cluster 2:", median_quality_cluster2))
+min_quality_cluster2 <- min(wine$quality[cluster3 == 2])
+print(paste("Minimum quality of wines in cluster 2:", min_quality_cluster2))
+max_quality_cluster2 <- max(wine$quality[cluster3 == 2])
+print(paste("Maximum quality of wines in cluster 2:", max_quality_cluster2))
+
+
+
+average_quality_cluster3 <- mean(wine$quality[cluster3 == 3])
+print(paste("Average quality of wines in cluster 3:", average_quality_cluster3))
+
+average_quality_cluster4 <- mean(wine$quality[cluster3 == 4])
+print(paste("Average quality of wines in cluster 4:", average_quality_cluster4))
+
+average_quality_cluster5 <- mean(wine$quality[cluster3 == 5])
+print(paste("Average quality of wines in cluster 5:", average_quality_cluster5))
+
+average_quality_cluster6 <- mean(wine$quality[cluster3 == 6])
+print(paste("Average quality of wines in cluster 6:", average_quality_cluster6))
+
+average_quality_cluster7 <- mean(wine$quality[cluster3 == 7])
+print(paste("Average quality of wines in cluster 7:", average_quality_cluster7))
+
+average_quality_cluster8 <- mean(wine$quality[cluster3 == 8])
+print(paste("Average quality of wines in cluster 2:", average_quality_cluster8))
+
+average_quality_cluster9 <- mean(wine$quality[cluster3 == 9])
+print(paste("Average quality of wines in cluster 9:", average_quality_cluster9))
+
+average_quality_cluster10 <- mean(wine$quality[cluster3 == 10])
+print(paste("Average quality of wines in cluster 10:", average_quality_cluster10))
+```
+
+Similar to kmeans and kmeans++, hierarchical clustering does a good job in distinguishing between colors. Aside from clusters 2 and 4, the color is more distinguishable than before. In fact, clusters 5,7,8,9, and 10 all include just one color of wine. This is somewhat expected for these clusters since they contain very few wines, particularly clusters 7-10, however, still a good sign.
+
+```{r}
+average_color_cluster1 <- mean(wine$color_numeric[cluster3 == 1])
+print(paste("Average color (numeric) of wines in cluster 1:", average_color_cluster1))
+
+average_color_cluster2 <- mean(wine$color_numeric[cluster3 == 2])
+print(paste("Average color (numeric) of wines in cluster 2:", average_color_cluster2))
+
+average_color_cluster3 <- mean(wine$color_numeric[cluster3 == 3])
+print(paste("Average color (numeric) of wines in cluster 3:", average_color_cluster3))
+
+average_color_cluster4 <- mean(wine$color_numeric[cluster3 == 4])
+print(paste("Average color (numeric) of wines in cluster 4:", average_color_cluster4))
+
+average_color_cluster5 <- mean(wine$color_numeric[cluster3 == 5])
+print(paste("Average color (numeric) of wines in cluster 5:", average_color_cluster5))
+
+average_color_cluster6 <- mean(wine$color_numeric[cluster3 == 6])
+print(paste("Average color (numeric) of wines in cluster 6:", average_color_cluster6))
+
+average_color_cluster7 <- mean(wine$color_numeric[cluster3 == 7])
+print(paste("Average color (numeric) of wines in cluster 7:", average_color_cluster7))
+
+average_color_cluster8 <- mean(wine$color_numeric[cluster3 == 8])
+print(paste("Average color (numeric) of wines in cluster 8:", average_color_cluster8))
+
+average_color_cluster9 <- mean(wine$color_numeric[cluster3 == 9])
+print(paste("Average color (numeric) of wines in cluster 9:", average_color_cluster9))
+
+average_color_cluster10 <- mean(wine$color_numeric[cluster3 == 10])
+print(paste("Average color (numeric) of wines in cluster 10:", average_color_cluster10))
+```
+
+#### **PCA Model:**
+
+First, I created a correlation heatmap next which looks at all of our numerical data (i.e. the data minus the wine color column).
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+#Create a df with PCA results
+pca_data <- data.frame(PC1 = pca_result$x[, 1], 
+                     PC2 = pca_result$x[, 2], 
+                     color = wine$color)
+pca_data
+```
+
+**Variance Plot:**
+
+```{r}
+pca_var <- pca_result$sdev^2
+pca_var_percent <- round(pca_var/sum(pca_var)*100, 1)
+barplot(pca_var_percent, xlab="Principal Component", 
+        ylab="Percent Variation Explained",
+        names.arg = paste("PC", 1:length(pca_var_percent), sep = ""),
+        main = "Percentage (%) Variation Explained by PCA models")
+cumulative_var_percent <- cumsum(pca_var_percent)
+
+for (i in 1:length(pca_var_percent)) {
+  cat(paste("PC", i, ": Eigenvalue =", pca_var[i], ", Explained Variance =", pca_var_percent[i], "%, Cumulative Variance =", cumulative_var_percent[i], "%\n"))
+}
+
+```
+
+Remember, the "best summary" is the one that preserves as much of the variance in the original data. As a result, I have produced a variance plot above.
+
+From this variance plot (variance scores of the number summaries) we can see that there are 3 distinct bins that have a variance above 15%, and then a slightly smaller fourth bin just below 10%. The other bins are relatively small.
+
+When we look at the summary, we account for just under 90% of the varaince with 7 PCs.
+
+Next, I am going to look at the first few PCs to answer the question: "Which variables does this load heavily on positively and negatively?" Note, I have only printed the first four PCs.
+
+```{r}
+summary(pca_var)
+
+```
+
+The table above shows a feature-centric view. This looks at the vectors and the direction they point to. Below, I have individually looked at the columns of these tables, with the PC numbers ordered:
+
+```{r}
+wine2 <- wine[, -c(12:14)]
+PCAwine = prcomp(wine2, scale=TRUE)
+round(PCAwine$rotation[,1:4],2) 
+
+# This seems to pick out characteristics of
+# well-received dramas with positive loadings?
+loadings_summary %>%
+  select(Features, PC1) %>%
+  arrange(desc(PC1))
+```
+
+PC1 is highly loaded on total sulfur dioxide and free sulfur dioxide. It is negatively loaded on pH, fixed acidity, chlorides, and sulphates.
+
+```{r}
+loadings_summary %>%
+  select(Features, PC2) %>%
+  arrange(desc(PC2))
+```
+
+PC2 is highly loaded on density and fixed acidity. It is negatively loaded on pH.
+
+```{r}
+loadings_summary %>%
+  select(Features, PC3) %>%
+  arrange(desc(PC3))
+```
+
+PC3 is highly loaded on pH and volatile acidity. It is negatively loaded on sulphates, alcohol, and fixed acidity.
+
+```{r}
+loadings_summary %>%
+  select(Features, PC4) %>%
+  arrange(desc(PC4))
+```
+
+PC4 is highly loaded on volatile acidity and residual sugar. It is negatively loaded on most other features!
+
+[Scatterplot:]{.underline}
+
+For PCA I have created a scatterplot to show that this model distinguishes between red and white wines, without using the mean values. PCA does not return lots of little clusters, so it is far better to graphically show that it recognizes color.
+
+I wanted to keep this plot 2-dimensional, so I have only taken the top 2 PCAs, which account for 50% of the variance. In a perfect world, I would use the first four.
+
+```{r}
+# scatter plot
+ggplot(data=pca_df, aes(x=PC1, y=PC2, color=color)) +
+  geom_point() + theme_bw() +
+  xlab(paste("PC1 - ", pca_var_percent[1], "%", sep="")) +
+  ylab(paste("PC2 - ", pca_var_percent[2], "%", sep="")) +
+  ggtitle("Colored Wines by Chemical Properties Using PCA")
+```
+
+I have tried to do the same for quality, but again, this is hard because quality appears to be indistinguishable.
+
+```{r}
+ggplot(data=pca_df, aes(x=PC1, y=PC2, color=as.factor(wine$quality))) +
+  geom_point() +
+  scale_color_manual(values = c("3" = "red", "4" = "orange", "5" = "yellow",
+                                "6" = "green", "7" = "blue", "8" = "purple", "9" = "black")) +
+  theme_bw() +
+  xlab(paste("PC1 - ", pca_var_percent[1], "%", sep="")) +
+  ylab(paste("PC2 - ", pca_var_percent[2], "%", sep="")) +
+  ggtitle("Quality Ratings of Wines by Chemical Properties Using PCA")
+
+```
+
+#### **tSNE Model:**
+
+***The tSNE model is created on python, and at the bottom of the code is the summary for all models.***
